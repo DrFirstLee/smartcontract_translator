@@ -8,6 +8,25 @@ from flask import render_template, request
 from flask_login import login_required
 from jinja2 import TemplateNotFound
 
+@blueprint.route('/translate')
+@login_required
+def translate():
+
+    return render_template('home/translate.html', segment='translate')
+
+
+@blueprint.route('/translate2')
+@login_required
+def translate2():
+
+    return render_template('home/translate2.html', segment='translate')
+
+@blueprint.route('/api_docs')
+@login_required
+def api_docs():
+
+    return render_template('home/api_docs.html', segment='translate')
+
 
 @blueprint.route('/index')
 @login_required

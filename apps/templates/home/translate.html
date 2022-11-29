@@ -1,0 +1,511 @@
+{% extends "layouts/base.html" %}
+
+{% block title %} Dashboard {% endblock %} 
+
+<!-- Specific Page CSS goes HERE  -->
+{% block stylesheets %}{% endblock stylesheets %}
+
+{% block content %}
+
+
+
+<h2 class="card-title">> 표준계약서 > 표준 스마트컨트랙트 번역하기</h2>
+
+<br><br>
+<div style="border: 0px solid gold; float: left; width: 45%;">
+
+          <div class="card-header" style="border: 0px solid gold; float: left; width: 73%;">
+       표준 계약서를을 입력해주세요!
+      </div>
+    
+    <div style= "float: center">
+      <p><textarea cols="72" rows="10"></textarea></p>
+      <button onclick="translate_res()">Translate</button>
+    </div>
+
+</div>
+<div style="border: 0px solid gold; float: left; width:45%;">
+
+          <div class="card-header" style="border: 0px solid gold; float: left; width: 73%;">
+       번역된 표준 스마트컨트랙트
+                 </div>
+        <form style= "float: center" >
+      <p><textarea cols="72" rows="10" id="result_translate" ></textarea></p>
+
+    </form>
+    </div>
+<br>
+
+
+<div style="border: 0px solid gold; float: left; width: 80%;">
+<br>
+<br>
+<br>
+<br>
+          <div class="card-header" style="border: 0px solid gold; float: left; width: 73%;">
+       이더리움 네트워크에 스마트컨트랙트 배포하기
+                 &nbsp; &nbsp;
+    <form style= "float: center">
+      <p><input type="submit" value="Deploy"></p>
+    </form>
+      </div>
+
+
+</div>
+{% endblock content %}
+
+<!-- Specific Page JS goes HERE  -->
+{% block javascripts %}
+
+
+<script>
+    
+
+function translate_res() {
+        var input = document.getElementById('result_translate');
+        input.value = input.value +'    \r\n \// SPDX-License-Identifier: GPL-3.0-or-later   \r\n \
+pragma solidity 0.8.11;   \r\n \
+   \r\n \
+import "lib/solmate/src/utils/SafeTransferLib.sol";   \r\n \
+import "lib/solmate/src/utils/ReentrancyGuard.sol";   \r\n \
+import "./libraries/PackedUint144.sol";   \r\n \
+import "./libraries/FullMath.sol";   \r\n \
+   \r\n \
+/*   \r\n \
+    Permissionless staking contract that allows any number of incentives to be running for any token (erc20).   \r\n \
+    Incentives can be created by anyone, the total reward amount must be sent at creation.   \r\n \
+    Incentives can be updated (change reward rate / duration).   \r\n \
+    Users can deposit their assets into the contract and then subscribe to any of the available incentives, up to 6 per token.   \r\n \
+ */   \r\n \
+   \r\n \
+contract StakingContractMainnet is ReentrancyGuard {   \r\n \
+   \r\n \
+    using SafeTransferLib for ERC20;   \r\n \
+    using PackedUint144 for uint144;   \r\n \
+   \r\n \
+    struct Incentive {   \r\n \
+        address creator;            // 1st slot   \r\n \
+        address token;              // 2nd slot   \r\n \
+        address rewardToken;        // 3rd slot   \r\n \
+        uint32 endTime;             // 3rd slot   \r\n \
+        uint256 rewardPerLiquidity; // 4th slot   \r\n \
+        uint32 lastRewardTime;      // 5th slot   \r\n \
+        uint112 rewardRemaining;    // 5th slot   \r\n \
+        uint112 liquidityStaked;    // 5th slot   \r\n \
+    }   \r\n \
+   \r\n \
+    uint256 public incentiveCount;   \r\n \
+   \r\n \
+    // Starts with 1. Zero is an invalid incentive.   \r\n \
+    mapping(uint256 => Incentive) public incentives;   \r\n \
+   \r\n \
+    /// @dev rewardPerLiquidityLast[user][incentiveId]   \r\n \
+    /// @dev Semantic overload: if value is zero user isn/t subscribed to the incentive.   \r\n \
+    mapping(address => mapping(uint256 => uint256)) public rewardPerLiquidityLast;   \r\n \
+   \r\n \
+    /// @dev userStakes[user][stakedToken]   \r\n \
+    mapping(address => mapping(address => UserStake)) public userStakes;   \r\n \
+   \r\n \
+    // Incentive count won/t be greater than type(uint24).max on mainnet.   \r\n \
+    // This means we can use uint24 values to identify incentives.   \r\n \
+    struct UserStake {   \r\n \
+        uint112 liquidity;   \r\n \
+        uint144 subscribedIncentiveIds; // Six packed uint24 values.   \r\n \
+    }   \r\n \
+   \r\n \
+    error InvalidTimeFrame();   \r\n \
+    error IncentiveOverflow();   \r\n \
+    error AlreadySubscribed();   \r\n \
+    error AlreadyUnsubscribed();   \r\n \
+    error NotSubscribed();   \r\n \
+    error OnlyCreator();   \r\n \
+    error NoToken();   \r\n \
+    error InvalidInput();   \r\n \
+    error BatchError(bytes innerError);   \r\n \
+    error InsufficientStakedAmount();   \r\n \
+    error NotStaked();   \r\n \
+    error InvalidIndex();   \r\n \
+   \r\n \
+    event IncentiveCreated(address indexed token, address indexed rewardToken, address indexed creator, uint256 id, uint256 amount, uint256 startTime, uint256 endTime);   \r\n \
+    event IncentiveUpdated(uint256 indexed id, int256 changeAmount, uint256 newStartTime, uint256 newEndTime);   \r\n \
+    event Stake(address indexed token, address indexed user, uint256 amount);   \r\n \
+    event Unstake(address indexed token, address indexed user, uint256 amount);   \r\n \
+    event Subscribe(uint256 indexed id, address indexed user);   \r\n \
+    event Unsubscribe(uint256 indexed id, address indexed user);   \r\n \
+    event Claim(uint256 indexed id, address indexed user, uint256 amount);   \r\n \
+   \r\n \
+    function createIncentive(   \r\n \
+        address token,   \r\n \
+        address rewardToken,   \r\n \
+        uint112 rewardAmount,   \r\n \
+        uint32 startTime,   \r\n \
+        uint32 endTime   \r\n \
+    ) external nonReentrant returns (uint256 incentiveId) {   \r\n \
+   \r\n \
+        if (rewardAmount <= 0) revert InvalidInput();   \r\n \
+   \r\n \
+        if (startTime < block.timestamp) startTime = uint32(block.timestamp);   \r\n \
+   \r\n \
+        if (startTime >= endTime) revert InvalidTimeFrame();   \r\n \
+   \r\n \
+        unchecked { incentiveId = ++incentiveCount; }   \r\n \
+   \r\n \
+        if (incentiveId > type(uint24).max) revert IncentiveOverflow();   \r\n \
+   \r\n \
+        _saferTransferFrom(rewardToken, rewardAmount);   \r\n \
+   \r\n \
+        incentives[incentiveId] = Incentive({   \r\n \
+            creator: msg.sender,   \r\n \
+            token: token,   \r\n \
+            rewardToken: rewardToken,   \r\n \
+            lastRewardTime: startTime,   \r\n \
+            endTime: endTime,   \r\n \
+            rewardRemaining: rewardAmount,   \r\n \
+            liquidityStaked: 0,   \r\n \
+            // Initial value of rewardPerLiquidity can be arbitrarily set to a non-zero value.   \r\n \
+            rewardPerLiquidity: type(uint256).max / 2   \r\n \
+        });   \r\n \
+   \r\n \
+        emit IncentiveCreated(token, rewardToken, msg.sender, incentiveId, rewardAmount, startTime, endTime);   \r\n \
+   \r\n \
+    }   \r\n \
+   \r\n \
+    function updateIncentive(   \r\n \
+        uint256 incentiveId,   \r\n \
+        int112 changeAmount,   \r\n \
+        uint32 newStartTime,   \r\n \
+        uint32 newEndTime   \r\n \
+    ) external nonReentrant {   \r\n \
+   \r\n \
+        Incentive storage incentive = incentives[incentiveId];   \r\n \
+   \r\n \
+        if (msg.sender != incentive.creator) revert OnlyCreator();   \r\n \
+   \r\n \
+        _accrueRewards(incentive);   \r\n \
+   \r\n \
+        if (newStartTime != 0) {   \r\n \
+   \r\n \
+            if (newStartTime < block.timestamp) newStartTime = uint32(block.timestamp);   \r\n \
+   \r\n \
+            incentive.lastRewardTime = newStartTime;   \r\n \
+   \r\n \
+        }   \r\n \
+   \r\n \
+        if (newEndTime != 0) {   \r\n \
+   \r\n \
+            if (newEndTime < block.timestamp) newEndTime = uint32(block.timestamp);   \r\n \
+   \r\n \
+            incentive.endTime = newEndTime;   \r\n \
+   \r\n \
+        }   \r\n \
+   \r\n \
+        if (incentive.lastRewardTime >= incentive.endTime) revert InvalidTimeFrame();   \r\n \
+   \r\n \
+        if (changeAmount > 0) {   \r\n \
+   \r\n \
+            incentive.rewardRemaining += uint112(changeAmount);   \r\n \
+   \r\n \
+            ERC20(incentive.rewardToken).safeTransferFrom(msg.sender, address(this), uint112(changeAmount));   \r\n \
+   \r\n \
+        } else if (changeAmount < 0) {   \r\n \
+   \r\n \
+            uint112 transferOut = uint112(-changeAmount);   \r\n \
+   \r\n \
+            if (transferOut > incentive.rewardRemaining) transferOut = incentive.rewardRemaining;   \r\n \
+   \r\n \
+            unchecked { incentive.rewardRemaining -= transferOut; }   \r\n \
+   \r\n \
+            ERC20(incentive.rewardToken).safeTransfer(msg.sender, transferOut);   \r\n \
+   \r\n \
+        }   \r\n \
+   \r\n \
+        emit IncentiveUpdated(incentiveId, changeAmount, incentive.lastRewardTime, incentive.endTime);   \r\n \
+   \r\n \
+    }   \r\n \
+   \r\n \
+    function stakeAndSubscribeToIncentives(   \r\n \
+        address token,   \r\n \
+        uint112 amount,   \r\n \
+        uint256[] memory incentiveIds,   \r\n \
+        bool transferExistingRewards   \r\n \
+    ) external {   \r\n \
+   \r\n \
+        stakeToken(token, amount, transferExistingRewards);   \r\n \
+   \r\n \
+        uint256 n = incentiveIds.length;   \r\n \
+   \r\n \
+        for (uint256 i = 0; i < n; i = _increment(i)) {   \r\n \
+   \r\n \
+            subscribeToIncentive(incentiveIds[i]);   \r\n \
+   \r\n \
+        }   \r\n \
+   \r\n \
+    }   \r\n \
+   \r\n \
+    function stakeToken(address token, uint112 amount, bool transferExistingRewards) public nonReentrant {   \r\n \
+   \r\n \
+        _saferTransferFrom(token, amount);   \r\n \
+   \r\n \
+        UserStake storage userStake = userStakes[msg.sender][token];   \r\n \
+   \r\n \
+        uint112 previousLiquidity = userStake.liquidity;   \r\n \
+   \r\n \
+        userStake.liquidity += amount;   \r\n \
+   \r\n \
+        uint256 n = userStake.subscribedIncentiveIds.countStoredUint24Values();   \r\n \
+   \r\n \
+        for (uint256 i = 0; i < n; i = _increment(i)) { // Loop through already subscribed incentives.   \r\n \
+   \r\n \
+            uint256 incentiveId = userStake.subscribedIncentiveIds.getUint24ValueAt(i);   \r\n \
+   \r\n \
+            Incentive storage incentive = incentives[incentiveId];   \r\n \
+   \r\n \
+            _accrueRewards(incentive);   \r\n \
+   \r\n \
+            if (transferExistingRewards) {   \r\n \
+   \r\n \
+                _claimReward(incentive, incentiveId, previousLiquidity);   \r\n \
+   \r\n \
+            } else {   \r\n \
+   \r\n \
+                _saveReward(incentive, incentiveId, previousLiquidity, userStake.liquidity);   \r\n \
+   \r\n \
+            }   \r\n \
+   \r\n \
+            incentive.liquidityStaked += amount;   \r\n \
+   \r\n \
+        }   \r\n \
+   \r\n \
+        emit Stake(token, msg.sender, amount);   \r\n \
+   \r\n \
+    }   \r\n \
+   \r\n \
+    function unstakeToken(address token, uint112 amount, bool transferExistingRewards) external nonReentrant {   \r\n \
+   \r\n \
+        UserStake storage userStake = userStakes[msg.sender][token];   \r\n \
+   \r\n \
+        uint112 previousLiquidity = userStake.liquidity;   \r\n \
+   \r\n \
+        if (amount > previousLiquidity) revert InsufficientStakedAmount();   \r\n \
+   \r\n \
+        userStake.liquidity -= amount;   \r\n \
+   \r\n \
+        uint256 n = userStake.subscribedIncentiveIds.countStoredUint24Values();   \r\n \
+   \r\n \
+        for (uint256 i = 0; i < n; i = _increment(i)) {   \r\n \
+   \r\n \
+            uint256 incentiveId = userStake.subscribedIncentiveIds.getUint24ValueAt(i);   \r\n \
+   \r\n \
+            Incentive storage incentive = incentives[incentiveId];   \r\n \
+   \r\n \
+            _accrueRewards(incentive);   \r\n \
+   \r\n \
+            if (transferExistingRewards || userStake.liquidity == 0) {   \r\n \
+   \r\n \
+                _claimReward(incentive, incentiveId, previousLiquidity);   \r\n \
+   \r\n \
+            } else {   \r\n \
+   \r\n \
+                _saveReward(incentive, incentiveId, previousLiquidity, userStake.liquidity);   \r\n \
+   \r\n \
+            }   \r\n \
+   \r\n \
+            incentive.liquidityStaked -= amount;   \r\n \
+   \r\n \
+        }   \r\n \
+   \r\n \
+        ERC20(token).safeTransfer(msg.sender, amount);   \r\n \
+   \r\n \
+        emit Unstake(token, msg.sender, amount);   \r\n \
+   \r\n \
+    }   \r\n \
+   \r\n \
+    function subscribeToIncentive(uint256 incentiveId) public nonReentrant {   \r\n \
+   \r\n \
+        if (incentiveId > incentiveCount || incentiveId <= 0) revert InvalidInput();   \r\n \
+   \r\n \
+        if (rewardPerLiquidityLast[msg.sender][incentiveId] != 0) revert AlreadySubscribed();   \r\n \
+   \r\n \
+        Incentive storage incentive = incentives[incentiveId];   \r\n \
+   \r\n \
+        if (userStakes[msg.sender][incentive.token].liquidity <= 0) revert NotStaked();   \r\n \
+   \r\n \
+        _accrueRewards(incentive);   \r\n \
+   \r\n \
+        rewardPerLiquidityLast[msg.sender][incentiveId] = incentive.rewardPerLiquidity;   \r\n \
+   \r\n \
+        UserStake storage userStake = userStakes[msg.sender][incentive.token];   \r\n \
+   \r\n \
+        userStake.subscribedIncentiveIds = userStake.subscribedIncentiveIds.pushUint24Value(uint24(incentiveId));   \r\n \
+   \r\n \
+        incentive.liquidityStaked += userStake.liquidity;   \r\n \
+   \r\n \
+        emit Subscribe(incentiveId, msg.sender);   \r\n \
+   \r\n \
+    }   \r\n \
+   \r\n \
+    /// @param incentiveIndex ∈ [0,5]   \r\n \
+    function unsubscribeFromIncentive(address token, uint256 incentiveIndex, bool ignoreRewards) external nonReentrant {   \r\n \
+   \r\n \
+        UserStake storage userStake = userStakes[msg.sender][token];   \r\n \
+   \r\n \
+        if (incentiveIndex >= userStake.subscribedIncentiveIds.countStoredUint24Values()) revert InvalidIndex();   \r\n \
+   \r\n \
+        uint256 incentiveId = userStake.subscribedIncentiveIds.getUint24ValueAt(incentiveIndex);   \r\n \
+   \r\n \
+        if (rewardPerLiquidityLast[msg.sender][incentiveId] == 0) revert AlreadyUnsubscribed();   \r\n \
+   \r\n \
+        Incentive storage incentive = incentives[incentiveId];   \r\n \
+   \r\n \
+        _accrueRewards(incentive);   \r\n \
+   \r\n \
+        /// In case there is a token specific issue we can ignore rewards.   \r\n \
+        if (!ignoreRewards) _claimReward(incentive, incentiveId, userStake.liquidity);   \r\n \
+   \r\n \
+        rewardPerLiquidityLast[msg.sender][incentiveId] = 0;   \r\n \
+   \r\n \
+        incentive.liquidityStaked -= userStake.liquidity;   \r\n \
+   \r\n \
+        userStake.subscribedIncentiveIds = userStake.subscribedIncentiveIds.removeUint24ValueAt(incentiveIndex);   \r\n \
+   \r\n \
+        emit Unsubscribe(incentiveId, msg.sender);   \r\n \
+   \r\n \
+    }   \r\n \
+   \r\n \
+    function accrueRewards(uint256 incentiveId) external nonReentrant {   \r\n \
+   \r\n \
+        if (incentiveId > incentiveCount || incentiveId <= 0) revert InvalidInput();   \r\n \
+   \r\n \
+        _accrueRewards(incentives[incentiveId]);   \r\n \
+   \r\n \
+    }   \r\n \
+   \r\n \
+    function claimRewards(uint256[] calldata incentiveIds) external nonReentrant returns (uint256[] memory rewards) {   \r\n \
+   \r\n \
+        uint256 n = incentiveIds.length;   \r\n \
+   \r\n \
+        rewards = new uint256[](n);   \r\n \
+   \r\n \
+        for(uint256 i = 0; i < n; i = _increment(i)) {   \r\n \
+   \r\n \
+            if (incentiveIds[i] > incentiveCount || incentiveIds[i] <= 0) revert InvalidInput();   \r\n \
+   \r\n \
+            Incentive storage incentive = incentives[incentiveIds[i]];   \r\n \
+   \r\n \
+            _accrueRewards(incentive);   \r\n \
+   \r\n \
+            rewards[i] = _claimReward(incentive, incentiveIds[i], userStakes[msg.sender][incentive.token].liquidity);   \r\n \
+   \r\n \
+        }   \r\n \
+   \r\n \
+    }   \r\n \
+   \r\n \
+    function _accrueRewards(Incentive storage incentive) internal {   \r\n \
+   \r\n \
+        uint256 lastRewardTime = incentive.lastRewardTime;   \r\n \
+   \r\n \
+        uint256 endTime = incentive.endTime;   \r\n \
+   \r\n \
+        unchecked {   \r\n \
+   \r\n \
+            uint256 maxTime = block.timestamp < endTime ? block.timestamp : endTime;   \r\n \
+   \r\n \
+            if (incentive.liquidityStaked > 0 && lastRewardTime < maxTime) {   \r\n \
+   \r\n \
+                uint256 totalTime = endTime - lastRewardTime;   \r\n \
+   \r\n \
+                uint256 passedTime = maxTime - lastRewardTime;   \r\n \
+   \r\n \
+                uint256 reward = uint256(incentive.rewardRemaining) * passedTime / totalTime;   \r\n \
+   \r\n \
+                // Increments of less than type(uint224).max - overflow is unrealistic.   \r\n \
+                incentive.rewardPerLiquidity += reward * type(uint112).max / incentive.liquidityStaked;   \r\n \
+   \r\n \
+                incentive.rewardRemaining -= uint112(reward);   \r\n \
+   \r\n \
+                incentive.lastRewardTime = uint32(maxTime);   \r\n \
+   \r\n \
+            } else if (incentive.liquidityStaked == 0 && lastRewardTime < block.timestamp) {   \r\n \
+   \r\n \
+                incentive.lastRewardTime = uint32(maxTime);   \r\n \
+   \r\n \
+            }   \r\n \
+   \r\n \
+        }   \r\n \
+   \r\n \
+    }   \r\n \
+   \r\n \
+    function _claimReward(Incentive storage incentive, uint256 incentiveId, uint112 usersLiquidity) internal returns (uint256 reward) {   \r\n \
+   \r\n \
+        reward = _calculateReward(incentive, incentiveId, usersLiquidity);   \r\n \
+   \r\n \
+        rewardPerLiquidityLast[msg.sender][incentiveId] = incentive.rewardPerLiquidity;   \r\n \
+   \r\n \
+        ERC20(incentive.rewardToken).safeTransfer(msg.sender, reward);   \r\n \
+   \r\n \
+        emit Claim(incentiveId, msg.sender, reward);   \r\n \
+   \r\n \
+    }   \r\n \
+   \r\n \
+    // We offset the rewardPerLiquidityLast snapshot so that the current reward is included next time we call _claimReward.   \r\n \
+    function _saveReward(Incentive storage incentive, uint256 incentiveId, uint112 usersLiquidity, uint112 newLiquidity) internal returns (uint256 reward) {   \r\n \
+   \r\n \
+        reward = _calculateReward(incentive, incentiveId, usersLiquidity);   \r\n \
+   \r\n \
+        uint256 rewardPerLiquidityDelta = reward * type(uint112).max / newLiquidity;   \r\n \
+   \r\n \
+        rewardPerLiquidityLast[msg.sender][incentiveId] = incentive.rewardPerLiquidity - rewardPerLiquidityDelta;   \r\n \
+   \r\n \
+    }   \r\n \
+   \r\n \
+    function _calculateReward(Incentive storage incentive, uint256 incentiveId, uint112 usersLiquidity) internal view returns (uint256 reward) {   \r\n \
+   \r\n \
+        uint256 userRewardPerLiquidtyLast = rewardPerLiquidityLast[msg.sender][incentiveId];   \r\n \
+   \r\n \
+        if (userRewardPerLiquidtyLast == 0) revert NotSubscribed();   \r\n \
+   \r\n \
+        uint256 rewardPerLiquidityDelta;   \r\n \
+   \r\n \
+        unchecked { rewardPerLiquidityDelta = incentive.rewardPerLiquidity - userRewardPerLiquidtyLast; }   \r\n \
+   \r\n \
+        reward = FullMath.mulDiv(rewardPerLiquidityDelta, usersLiquidity, type(uint112).max);   \r\n \
+   \r\n \
+    }   \r\n \
+   \r\n \
+    function _saferTransferFrom(address token, uint256 amount) internal {   \r\n \
+   \r\n \
+        if (token.code.length == 0) revert NoToken();   \r\n \
+   \r\n \
+        ERC20(token).safeTransferFrom(msg.sender, address(this), amount);   \r\n \
+   \r\n \
+    }   \r\n \
+   \r\n \
+    function _increment(uint256 i) internal pure returns (uint256) {   \r\n \
+   \r\n \
+        unchecked { return i + 1; }   \r\n \
+   \r\n \
+    }   \r\n \
+   \r\n \
+    function batch(bytes[] calldata datas) external {   \r\n \
+   \r\n \
+        uint256 n = datas.length;   \r\n \
+   \r\n \
+        for (uint256 i = 0; i < n; i = _increment(i)) {   \r\n \
+   \r\n \
+            (bool success, bytes memory result) = address(this).delegatecall(datas[i]);   \r\n \
+   \r\n \
+            if (!success) {   \r\n \
+   \r\n \
+                revert BatchError(result);   \r\n \
+   \r\n \
+            }   \r\n \
+   \r\n \
+        }   \r\n \
+   \r\n \
+    }   \r\n \
+   \r\n \
+}';
+    
+}
+</script>
+{% endblock javascripts %}

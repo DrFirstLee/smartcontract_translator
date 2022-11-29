@@ -1,0 +1,60 @@
+{% extends "layouts/base.html" %}
+
+{% block title %} Dashboard {% endblock %} 
+
+<!-- Specific Page CSS goes HERE  -->
+{% block stylesheets %}{% endblock stylesheets %}
+
+{% block content %}
+<h2 class="card-title">> 표준계약서 > 표준 스마트컨트랙트 번역하기</h2>
+
+<br><br>
+<div style="border: 0px solid gold; float: left; width: 45%;">
+
+          <div class="card-header" style="border: 0px solid gold; float: left; width: 73%;">
+       표준 스마트컨트랙트를 입력해주세요!
+      </div>
+    
+    <div style= "float: center">
+      <p><textarea cols="72" rows="10"  ></textarea></p>
+      <button onclick="translate_res()">Translate</button>
+    </div>
+
+</div>
+<div style="border: 0px solid gold; float: left; width: 45%;">
+
+          <div class="card-header" style="border: 0px solid gold; float: left; width: 73%;">
+       번역된 표준 계약서
+                 </div>
+        <form style= "float: center">
+      <p><textarea cols="72" rows="10" id="result_translate"></textarea></p>
+
+    </form>
+    </div>
+{% endblock content %}
+
+<!-- Specific Page JS goes HERE  -->
+{% block javascripts %}
+
+  <script>
+function translate_res() {
+        var input = document.getElementById('result_translate');
+        input.value = input.value +' 대출금액	1,000 ETH  \r\n \
+약정이자율 연 15%  \r\n \
+이자 지급일 : 매월 20일 18:00 CMT +9  \r\n \
+대출기간	30 개월  \r\n \
+상환방식	원리금균등분할  \r\n \
+중도상환수수료	없음	  \r\n \
+지연배상금율	약정 이자율 + 최고 3%   \r\n \
+  \r\n \
+1. 신청인은 OO 스왑과대출 거래를 함에 있어, 본 약정 및 약관(여신거래기본약관, 개인신용대출약관,  \r\n \
+   기업신용대출약관, 자동이체약관)이 적용됨에 동의합니다.  \r\n \
+2. 신청인은 본 약정 및 약관 내용에 대해 충분한 설명을 듣고 이해한 후 본인의 의사에 따라 본 약정을 체결하였으며   \r\n \
+   약정 내용을 성실히 이행할 것을 확약합니다.  \r\n \
+3. OO 스왑은 고객의 신원확인 및 검증을 위해 고객 정보, 문서, 그 밖의 확인자료 등을 수집합니다. 신청인이 확인 정보 제출을 거부하거나,  \r\n \
+   신원확인 및 검증이 불가능한 경우 신청인에 대한 금융거래가 거절될 수 있습니다.  \r\n \
+'
+}
+  </script>
+
+{% endblock javascripts %}

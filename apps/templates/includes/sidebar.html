@@ -3,13 +3,13 @@
     <div class="sidebar">
       <div class="sidebar-wrapper">
         <div class="logo">
-          <a target="_blank" rel="sponsored noopener noreferrer" 
-             href="https://www.creative-tim.com/product/black-dashboard-flask" class="simple-text logo-mini">
+          <a 
+             href="/index" class="simple-text logo-mini">
             PI
           </a>
-          <a target="_blank" rel="sponsored noopener noreferrer" 
-             href="https://www.creative-tim.com/product/black-dashboard-flask" class="simple-text logo-normal">
-            Flask Black
+          <a  
+             href="/index" class="simple-text logo-normal">
+           표준계약서 Home
           </a>
         </div>
 
@@ -17,24 +17,24 @@
         {% if current_user.is_authenticated %}
 
           <li class="{% if 'index' in segment %} active {% endif %}">
-            <a href="/">
-              <i class="tim-icons icon-chart-pie-36"></i>
-              <p>Dashboard</p>
+            <a href="/translate">
+              <i class="tim-icons icon-atom"></i>
+              <p>표준계약서 번역</p>
             </a>
           </li>
           <li class="{% if 'icons' in segment %} active {% endif %}">
-            <a href="/ui-icons.html">
+            <a href="/translate2">
               <i class="tim-icons icon-atom"></i>
-              <p>Icons</p>
+              <p>표준 스마트컨트랙트 번역</p>
             </a>
           </li>
           <li class="{% if 'maps' in segment %} active {% endif %}">
-            <a href="/ui-maps.html">
+            <a href="/api_docs">
               <i class="tim-icons icon-pin"></i>
-              <p>Maps</p>
+              <p>Api Service</p>
             </a>
           </li>
-          <li class="{% if 'notifications' in segment %} active {% endif %}">
+<!--           <li class="{% if 'notifications' in segment %} active {% endif %}">
             <a href="/ui-notifications.html">
               <i class="tim-icons icon-bell-55"></i>
               <p>Notifications</p>
@@ -69,13 +69,13 @@
               <i class="tim-icons icon-button-power"></i>
               <p>Logout</p>
             </a>
-          </li>
+          </li> -->
           {% else %}
           <li class="active">
             <a target="_blank" 
                href="https://appseed.us/admin-dashboards/flask-dashboard-black-pro">
               <i class="tim-icons icon-spaceship"></i>
-              <p>PRO Version</p>
+              <p>Contacts</p>
             </a>
           </li>   
           {% endif %}
